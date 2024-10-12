@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+
+get_bat_perc(){
+    awk -F'=' '/POWER_SUPPLY_CAPACITY=/ { print $2 }' /sys/class/power_supply/BAT$1/uevent
+}
+
+get_bat_charging(){
+    [ "$(awk -F'=' '/POWER_SUPPLY_STATUS=/ { print $2 }' /sys/class/power_supply/BAT"$1"/uevent)" = "Charging" ]
+}
+
+send_noti(){
+    notify-send "Battery $1 low" "Battery at $2%" --app-name Bat-Noti
+    flash
+}
+
+flash(){
+    CURRENTLVL=$(brightnessctl --device='tpacpi::kbd_backlight' get)
+    echo $CURRENTLVL
+    brightnessctl --device='tpacpi::kbd_backlight' set 0
+    sleep 0.5s
+    brightnessctl --device='tpacpi::kbd_backlight' set 2
+    sleep 0.5s
+    brightnessctl --device='tpacpi::kbd_backlight' set 0
+    sleep 0.5s
+    brightnessctl --device='tpacpi::kbd_backlight' set 2
+    sleep 0.5s
+    brightnessctl --device='tpacpi::kbd_backlight' set 0
+    sleep 0.5s
+    brightnessctl --device='tpacpi::kbd_backlight' set 2
+    sleep 0.5s
+    brightnessctl --device='tpacpi::kbd_backlight' set 0
+    sleep 0.5s
+    brightnessctl --device='tpacpi::kbd_backlight' set $CURRENTLVL
+}
+
+main(){
+    BAT0NOTI=false
+    BAT1NOTI=false
+    while true; do
+        BAT0PERC=$(get_bat_perc 0)
+        BAT1PERC=$(get_bat_perc 1)
+
+        if get_bat_charging 0 ||  get_bat_charging 1; then
+            BAT0NOTI=false
+            BAT1NOTI=false
+            BATCHAR=true
+        else
+            BATCHAR=false
+        fi
+
+        if [ $BAT0PERC -lt 20 ] && [ $BAT0NOTI = false ] && [ $BATCHAR = false ]; then
+            BAT0NOTI=true
+            send_noti 0 $BAT0PERC
+        fi
+        if [ $BAT1PERC -lt 20 ] && [ $BAT1NOTI = false ] && [ $BATCHAR = false ]; then
+            BAT1NOTI=true
+            send_noti 1 $BAT1PERC
+        fi
+
+        sleep 30s
+    done
+}
+
+main
