@@ -9,7 +9,7 @@ get_bat_charging(){
 }
 
 send_noti(){
-    notify-send "Battery $1 low" "Battery at $2%" --app-name Bat-Noti
+    notify-send "Battery $1 low" "Battery at $2%" --app-name Bat-Noti -u critical -i <PATH/TO/ICON>battery!.png
     flash
 }
 
