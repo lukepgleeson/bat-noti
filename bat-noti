@@ -1,5 +1,43 @@
 #!/usr/bin/env bash
 
+file_read_error () {
+    echo "${opt}: ${OPTARG}: cannot read file" 
+    exit 2
+}
+
+usage() {
+    echo "Usage: $0 -p <absolute_path_to_properties_file>"
+    exit 1
+}
+
+while getopts 'p:' opt; do
+    case $opt in
+        p)
+            [ -f "$OPTARG" ] || file_read_error 
+            PROPERTIES_FILE="${OPTARG}"
+            ;;
+        :)
+            error "Option -$OPTARG requires an argument." 2
+            ;;
+        \?)
+            exit 2
+            ;;
+    esac
+done
+
+if [ -z "$PROPERTIES_FILE" ]; then
+    echo "Error: Mandatory option -p is required." >&2
+    usage
+fi
+
+
+get_properties(){
+    BATTERY_ALERT_PERCENTAGE_THRESHOLD=$(awk -F'=' '/BATTERY_ALERT_PERCENTAGE_THRESHOLD=/ { print $2 }' "$PROPERTIES_FILE")
+    KEYBOARD_LED_ALERT=$(awk -F'=' '/KEYBOARD_LED_ALERT=/ { print $2 }' "$PROPERTIES_FILE")
+    ABSOLUTE_PATH_TO_NOTIFY_ICON=$(awk -F'=' '/ABSOLUTE_PATH_TO_NOTIFY_ICON=/ { print $2 }' "$PROPERTIES_FILE")
+    WATCHDOG_TIME=$(awk -F'=' '/WATCHDOG_TIME=/ { print $2 }' "$PROPERTIES_FILE")
+}
+
 get_bat_perc(){
     awk -F'=' '/POWER_SUPPLY_CAPACITY=/ { print $2 }' /sys/class/power_supply/BAT$1/uevent
 }
@@ -9,8 +47,10 @@ get_bat_charging(){
 }
 
 send_noti(){
-    notify-send "Battery $1 low" "Battery at $2%" --app-name Bat-Noti -u critical -i <PATH/TO/ICON>battery!.png
-    flash
+    notify-send "Battery $1 low" "Battery at $2%" --app-name Bat-Noti -u critical -i $ABSOLUTE_PATH_TO_NOTIFY_ICON
+    if [[ $KEYBOARD_LED_ALERT = true ]]; then
+        flash
+    fi
 }
 
 flash(){
@@ -34,6 +74,7 @@ flash(){
 }
 
 main(){
+    get_properties
     BAT0NOTI=false
     BAT1NOTI=false
     while true; do
@@ -48,16 +89,16 @@ main(){
             BATCHAR=false
         fi
 
-        if [ $BAT0PERC -lt 20 ] && [ $BAT0NOTI = false ] && [ $BATCHAR = false ]; then
+        if [ $BAT0PERC -lt $BATTERY_ALERT_PERCENTAGE_THRESHOLD ] && [ $BAT0NOTI = false ] && [ $BATCHAR = false ]; then
             BAT0NOTI=true
             send_noti 0 $BAT0PERC
         fi
-        if [ $BAT1PERC -lt 20 ] && [ $BAT1NOTI = false ] && [ $BATCHAR = false ]; then
+        if [ $BAT1PERC -lt $BATTERY_ALERT_PERCENTAGE_THRESHOLD ] && [ $BAT1NOTI = false ] && [ $BATCHAR = false ]; then
             BAT1NOTI=true
             send_noti 1 $BAT1PERC
         fi
 
-        sleep 30s
+        sleep "$WATCHDOG_TIME"s
     done
 }
 
